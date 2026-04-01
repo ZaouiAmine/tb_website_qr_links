@@ -14,7 +14,7 @@ const els = {
 };
 
 const state = {
-  lastPngUrl: /** @type {string | null} */ (null),
+  lastSvg: /** @type {string | null} */ (null),
 };
 
 function setStatus(text) {
@@ -22,8 +22,8 @@ function setStatus(text) {
 }
 
 function ensureQrLib() {
-  // qrcode.js exposes a global `QRCode`
-  if (typeof window.QRCode !== "function") {
+  // qrcode-generator exposes a global `qrcode(typeNumber, errorCorrectionLevel)`
+  if (typeof window.qrcode !== "function") {
     setStatus("QR library failed to load. Please refresh.");
     return false;
   }
@@ -32,8 +32,7 @@ function ensureQrLib() {
 
 function clearQr() {
   els.qrcode.innerHTML = "";
-  if (state.lastPngUrl) URL.revokeObjectURL(state.lastPngUrl);
-  state.lastPngUrl = null;
+  state.lastSvg = null;
   els.copy.disabled = true;
   els.download.href = "#";
   els.download.setAttribute("aria-disabled", "true");
@@ -48,61 +47,9 @@ function normalizeLink(raw) {
   return v;
 }
 
-function getQrSourceNode() {
-  const canvas = els.qrcode.querySelector("canvas");
-  if (canvas) return canvas;
-  const img = els.qrcode.querySelector("img");
-  if (img) return img;
-  return null;
-}
-
-async function toPngDataUrl(node, paddingPx) {
-  const size = Number.parseInt(els.size.value, 10);
-  const outSize = size + paddingPx * 2;
-
-  const outCanvas = document.createElement("canvas");
-  outCanvas.width = outSize;
-  outCanvas.height = outSize;
-  const ctx = outCanvas.getContext("2d");
-  if (!ctx) throw new Error("canvas-ctx-unavailable");
-
-  // White background.
-  ctx.fillStyle = "#ffffff";
-  ctx.fillRect(0, 0, outSize, outSize);
-
-  if (node instanceof HTMLCanvasElement) {
-    ctx.drawImage(node, paddingPx, paddingPx, size, size);
-    return outCanvas.toDataURL("image/png");
-  }
-
-  if (node instanceof HTMLImageElement) {
-    // qrcode.js often renders GIF; we convert to PNG by drawing to canvas.
-    await new Promise((resolve, reject) => {
-      if (node.complete && node.naturalWidth > 0) return resolve(true);
-      node.addEventListener("load", () => resolve(true), { once: true });
-      node.addEventListener("error", () => reject(new Error("image-load-failed")), { once: true });
-    });
-    ctx.drawImage(node, paddingPx, paddingPx, size, size);
-    return outCanvas.toDataURL("image/png");
-  }
-
-  throw new Error("unsupported-node");
-}
-
-async function getPngDataUrl() {
-  const node = getQrSourceNode();
-  if (!node) return null;
-
-  const margin = Number.parseInt(els.margin.value, 10);
-  const paddingPx = Math.max(0, margin) * 8; // visually matches "margin" without relying on qrcode.js internals
-  return await toPngDataUrl(node, paddingPx);
-}
-
-async function copyPngToClipboard(dataUrl) {
-  const res = await fetch(dataUrl);
-  const blob = await res.blob();
-  const item = new ClipboardItem({ [blob.type]: blob });
-  await navigator.clipboard.write([item]);
+function svgDataUrl(svg) {
+  // Avoid btoa Unicode issues; use encodeURIComponent.
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
 function renderQr(text) {
@@ -110,30 +57,43 @@ function renderQr(text) {
   clearQr();
 
   const size = Number.parseInt(els.size.value, 10);
+  const margin = Number.parseInt(els.margin.value, 10);
   const level = els.eclevel.value;
 
-  // qrcode.js uses "correctLevel" enum.
-  const correctLevel =
-    level === "L"
-      ? window.QRCode.CorrectLevel.L
-      : level === "M"
-        ? window.QRCode.CorrectLevel.M
-        : level === "Q"
-          ? window.QRCode.CorrectLevel.Q
-          : window.QRCode.CorrectLevel.H;
+  // qrcode-generator error correction levels: L, M, Q, H
+  const qr = window.qrcode(0, level);
+  qr.addData(text);
+  qr.make();
 
-  // eslint-disable-next-line no-new
-  new QRCode(els.qrcode, {
-    text,
-    width: size,
-    height: size,
-    colorDark: "#111111",
-    colorLight: "#ffffff",
-    correctLevel,
-  });
+  const count = qr.getModuleCount();
+  const quiet = Math.max(0, margin) * 2; // module-based quiet zone
+  const total = count + quiet * 2;
+  const cell = Math.floor(size / total) || 1;
+  const px = total * cell;
 
-  // Give qrcode.js a tick to render (<img> or <canvas>), then enable exports.
-  setTimeout(() => void refreshExportLinks(), 0);
+  const parts = [];
+  parts.push(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${px}" height="${px}" viewBox="0 0 ${px} ${px}" shape-rendering="crispEdges">`,
+  );
+  parts.push(`<rect width="100%" height="100%" fill="#fff"/>`);
+
+  for (let r = 0; r < count; r++) {
+    for (let c = 0; c < count; c++) {
+      if (!qr.isDark(r, c)) continue;
+      const x = (c + quiet) * cell;
+      const y = (r + quiet) * cell;
+      parts.push(`<rect x="${x}" y="${y}" width="${cell}" height="${cell}" fill="#111"/>`);
+    }
+  }
+  parts.push(`</svg>`);
+
+  const svg = parts.join("");
+  state.lastSvg = svg;
+  els.qrcode.innerHTML = svg;
+
+  els.copy.disabled = false;
+  els.download.href = svgDataUrl(svg);
+  els.download.setAttribute("aria-disabled", "false");
 }
 
 function tryGenerate() {
@@ -184,64 +144,25 @@ els.eclevel.addEventListener("change", () => {
   if (normalized) renderQr(normalized);
 });
 
-async function refreshExportLinks() {
-  const node = getQrSourceNode();
-  if (!node) {
-    els.copy.disabled = true;
-    els.download.href = "#";
-    els.download.setAttribute("aria-disabled", "true");
-    return;
-  }
-
-  try {
-    const dataUrl = await getPngDataUrl();
-    if (!dataUrl) throw new Error("no-data");
-    els.copy.disabled = false;
-    els.download.href = dataUrl;
-    els.download.setAttribute("aria-disabled", "false");
-  } catch {
-    // Still allow scanning; only exporting is affected.
-    els.copy.disabled = true;
-    els.download.href = "#";
-    els.download.setAttribute("aria-disabled", "true");
-    setStatus("QR generated. Export may be blocked by browser permissions.");
-  }
-}
-
 els.download.addEventListener("click", async (e) => {
-  const node = getQrSourceNode();
-  if (!node) {
+  if (!state.lastSvg) {
     e.preventDefault();
     setStatus("Generate a QR code first.");
     return;
   }
-
-  const dataUrl = await getPngDataUrl();
-  if (!dataUrl) {
-    e.preventDefault();
-    setStatus("Generate a QR code first.");
-    return;
-  }
-
-  els.download.href = dataUrl;
+  els.download.href = svgDataUrl(state.lastSvg);
   els.download.setAttribute("aria-disabled", "false");
 });
 
 els.copy.addEventListener("click", async () => {
-  const dataUrl = await getPngDataUrl();
-  if (!dataUrl) {
+  if (!state.lastSvg) {
     setStatus("Generate a QR code first.");
     return;
   }
 
-  if (!navigator.clipboard || !window.ClipboardItem) {
-    setStatus("Clipboard PNG copy isn’t supported in this browser.");
-    return;
-  }
-
   try {
-    await copyPngToClipboard(dataUrl);
-    setStatus("Copied PNG to clipboard.");
+    await navigator.clipboard.writeText(state.lastSvg);
+    setStatus("Copied SVG to clipboard.");
   } catch {
     setStatus("Couldn’t copy to clipboard (permission blocked). Use Download instead.");
   }

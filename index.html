@@ -86,16 +86,16 @@
                 type="button"
                 disabled
               >
-                Copy PNG
+                Copy SVG
               </button>
               <a
                 id="download"
                 class="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-900 hover:bg-slate-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
-                download="qr.png"
+                download="qr.svg"
                 href="#"
                 aria-disabled="true"
               >
-                Download PNG
+                Download SVG
               </a>
               <button
                 id="clear"
@@ -126,8 +126,8 @@
       </section>
     </main>
 
-    <!-- Use the canonical davidshimjs build to avoid npm path issues -->
-    <script src="https://cdn.jsdelivr.net/gh/davidshimjs/qrcodejs/qrcode.min.js"></script>
+    <!-- QR generator that lets us render SVG directly -->
+    <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
     <!-- Use relative paths because the site is mounted under /qr -->
     <script type="module" src="assets/app.js"></script>
   </body>
