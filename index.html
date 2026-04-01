@@ -128,7 +128,13 @@
 
     <!-- qrcode-svg (SVG output directly; no images) -->
     <script src="https://cdn.jsdelivr.net/npm/qrcode-svg@1.1.0/dist/qrcode.min.js"></script>
-    <!-- Use relative paths because the site is mounted under /qr -->
-    <script type="module" src="assets/app.js"></script>
+    <script>
+      // The site is mounted at /qr. If loaded as "/qr" (no trailing slash),
+      // relative asset URLs resolve to "/assets/..." and break.
+      if (!location.pathname.endsWith("/")) {
+        location.replace(location.pathname + "/" + location.search + location.hash);
+      }
+    </script>
+    <script type="module" src="./assets/app.js"></script>
   </body>
 </html>
