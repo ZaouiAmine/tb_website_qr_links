@@ -28,7 +28,6 @@ function clearQr() {
   els.copy.disabled = true;
   els.download.href = "#";
   els.download.setAttribute("aria-disabled", "true");
-  setStatus("");
 }
 
 function normalizeLink(raw) {
@@ -40,15 +39,54 @@ function normalizeLink(raw) {
   return v;
 }
 
-function getPngDataUrl() {
-  /** qrcode.js may render either <img> or <canvas>. */
-  const img = els.qrcode.querySelector("img");
-  if (img?.src?.startsWith("data:image")) return img.src;
-
+function getQrSourceNode() {
   const canvas = els.qrcode.querySelector("canvas");
-  if (canvas) return canvas.toDataURL("image/png");
-
+  if (canvas) return canvas;
+  const img = els.qrcode.querySelector("img");
+  if (img) return img;
   return null;
+}
+
+async function toPngDataUrl(node, paddingPx) {
+  const size = Number.parseInt(els.size.value, 10);
+  const outSize = size + paddingPx * 2;
+
+  const outCanvas = document.createElement("canvas");
+  outCanvas.width = outSize;
+  outCanvas.height = outSize;
+  const ctx = outCanvas.getContext("2d");
+  if (!ctx) throw new Error("canvas-ctx-unavailable");
+
+  // White background.
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, outSize, outSize);
+
+  if (node instanceof HTMLCanvasElement) {
+    ctx.drawImage(node, paddingPx, paddingPx, size, size);
+    return outCanvas.toDataURL("image/png");
+  }
+
+  if (node instanceof HTMLImageElement) {
+    // qrcode.js often renders GIF; we convert to PNG by drawing to canvas.
+    await new Promise((resolve, reject) => {
+      if (node.complete && node.naturalWidth > 0) return resolve(true);
+      node.addEventListener("load", () => resolve(true), { once: true });
+      node.addEventListener("error", () => reject(new Error("image-load-failed")), { once: true });
+    });
+    ctx.drawImage(node, paddingPx, paddingPx, size, size);
+    return outCanvas.toDataURL("image/png");
+  }
+
+  throw new Error("unsupported-node");
+}
+
+async function getPngDataUrl() {
+  const node = getQrSourceNode();
+  if (!node) return null;
+
+  const margin = Number.parseInt(els.margin.value, 10);
+  const paddingPx = Math.max(0, margin) * 8; // visually matches "margin" without relying on qrcode.js internals
+  return await toPngDataUrl(node, paddingPx);
 }
 
 async function copyPngToClipboard(dataUrl) {
@@ -62,7 +100,6 @@ function renderQr(text) {
   clearQr();
 
   const size = Number.parseInt(els.size.value, 10);
-  const margin = Number.parseInt(els.margin.value, 10);
   const level = els.eclevel.value;
 
   // qrcode.js uses "correctLevel" enum.
@@ -84,16 +121,6 @@ function renderQr(text) {
     colorLight: "#ffffff",
     correctLevel,
   });
-
-  // qrcode.js doesn't expose margin; we can approximate by wrapping and padding.
-  els.qrcode.style.padding = `${margin * 4}px`;
-
-  const dataUrl = getPngDataUrl();
-  if (dataUrl) {
-    els.copy.disabled = false;
-    els.download.href = dataUrl;
-    els.download.setAttribute("aria-disabled", "false");
-  }
 }
 
 function tryGenerate() {
@@ -143,16 +170,58 @@ els.eclevel.addEventListener("change", () => {
   if (normalized) renderQr(normalized);
 });
 
-els.download.addEventListener("click", (e) => {
-  const dataUrl = getPngDataUrl();
+async function refreshExportLinks() {
+  const node = getQrSourceNode();
+  if (!node) {
+    els.copy.disabled = true;
+    els.download.href = "#";
+    els.download.setAttribute("aria-disabled", "true");
+    return;
+  }
+
+  try {
+    const dataUrl = await getPngDataUrl();
+    if (!dataUrl) throw new Error("no-data");
+    els.copy.disabled = false;
+    els.download.href = dataUrl;
+    els.download.setAttribute("aria-disabled", "false");
+  } catch {
+    // Still allow scanning; only exporting is affected.
+    els.copy.disabled = true;
+    els.download.href = "#";
+    els.download.setAttribute("aria-disabled", "true");
+    setStatus("QR generated. Export may be blocked by browser permissions.");
+  }
+}
+
+// When QR is generated, give qrcode.js a tick to render then refresh export links.
+const _renderQr = renderQr;
+renderQr = function renderQrPatched(text) {
+  _renderQr(text);
+  setTimeout(() => void refreshExportLinks(), 0);
+};
+
+els.download.addEventListener("click", async (e) => {
+  const node = getQrSourceNode();
+  if (!node) {
+    e.preventDefault();
+    setStatus("Generate a QR code first.");
+    return;
+  }
+
+  const dataUrl = await getPngDataUrl();
   if (!dataUrl) {
     e.preventDefault();
     setStatus("Generate a QR code first.");
+    return;
   }
+
+  els.download.href = dataUrl;
+  els.download.setAttribute("aria-disabled", "false");
 });
 
 els.copy.addEventListener("click", async () => {
-  const dataUrl = getPngDataUrl();
+  const dataUrl = await getPngDataUrl();
   if (!dataUrl) {
     setStatus("Generate a QR code first.");
     return;
