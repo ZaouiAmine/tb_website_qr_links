@@ -128,6 +128,7 @@
 
     <!-- Use the canonical davidshimjs build to avoid npm path issues -->
     <script src="https://cdn.jsdelivr.net/gh/davidshimjs/qrcodejs/qrcode.min.js"></script>
-    <script type="module" src="/assets/app.js"></script>
+    <!-- Use relative paths because the site is mounted under /qr -->
+    <script type="module" src="assets/app.js"></script>
   </body>
 </html>
