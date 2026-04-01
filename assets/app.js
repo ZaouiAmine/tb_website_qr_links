@@ -22,8 +22,8 @@ function setStatus(text) {
 }
 
 function ensureQrLib() {
-  // qrcode-generator exposes a global `qrcode(typeNumber, errorCorrectionLevel)`
-  if (typeof window.qrcode !== "function") {
+  // qrcode-svg exposes a global `QRCode` constructor in the browser build.
+  if (typeof window.QRCode !== "function") {
     setStatus("QR library failed to load. Please refresh.");
     return false;
   }
@@ -60,34 +60,20 @@ function renderQr(text) {
   const margin = Number.parseInt(els.margin.value, 10);
   const level = els.eclevel.value;
 
-  // qrcode-generator error correction levels: L, M, Q, H
-  const qr = window.qrcode(0, level);
-  qr.addData(text);
-  qr.make();
+  // qrcode-svg expects padding in modules. Use our margin dropdown as modules.
+  const qr = new window.QRCode({
+    content: text,
+    padding: Math.max(0, margin),
+    width: size,
+    height: size,
+    color: "#111111",
+    background: "#ffffff",
+    ecl: level,
+    join: true,
+    container: "svg",
+  });
 
-  const count = qr.getModuleCount();
-  const quiet = Math.max(0, margin) * 2; // module-based quiet zone
-  const total = count + quiet * 2;
-  const cell = Math.floor(size / total) || 1;
-  const px = total * cell;
-
-  const parts = [];
-  parts.push(
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${px}" height="${px}" viewBox="0 0 ${px} ${px}" shape-rendering="crispEdges">`,
-  );
-  parts.push(`<rect width="100%" height="100%" fill="#fff"/>`);
-
-  for (let r = 0; r < count; r++) {
-    for (let c = 0; c < count; c++) {
-      if (!qr.isDark(r, c)) continue;
-      const x = (c + quiet) * cell;
-      const y = (r + quiet) * cell;
-      parts.push(`<rect x="${x}" y="${y}" width="${cell}" height="${cell}" fill="#111"/>`);
-    }
-  }
-  parts.push(`</svg>`);
-
-  const svg = parts.join("");
+  const svg = qr.svg();
   state.lastSvg = svg;
   els.qrcode.innerHTML = svg;
 
