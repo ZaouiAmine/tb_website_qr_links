@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Link → QR</title>
+    <link rel="stylesheet" href="/assets/style.css" />
+  </head>
+  <body>
+    <main class="wrap">
+      <header class="header">
+        <h1>Link → QR</h1>
+        <p class="sub">Paste a link, generate a QR code, download as PNG.</p>
+      </header>
+
+      <section class="card">
+        <label class="label" for="link">Link</label>
+        <div class="row">
+          <input
+            id="link"
+            class="input"
+            type="url"
+            inputmode="url"
+            autocomplete="off"
+            spellcheck="false"
+            placeholder="https://example.com"
+          />
+          <button id="generate" class="btn primary" type="button">Generate</button>
+        </div>
+
+        <div class="opts">
+          <div class="opt">
+            <label class="label" for="size">Size</label>
+            <select id="size" class="select">
+              <option value="192">192</option>
+              <option value="256" selected>256</option>
+              <option value="320">320</option>
+              <option value="384">384</option>
+              <option value="512">512</option>
+            </select>
+          </div>
+          <div class="opt">
+            <label class="label" for="margin">Margin</label>
+            <select id="margin" class="select">
+              <option value="0">0</option>
+              <option value="1">1</option>
+              <option value="2" selected>2</option>
+              <option value="4">4</option>
+              <option value="8">8</option>
+            </select>
+          </div>
+          <div class="opt">
+            <label class="label" for="eclevel">Error correction</label>
+            <select id="eclevel" class="select">
+              <option value="L">L</option>
+              <option value="M" selected>M</option>
+              <option value="Q">Q</option>
+              <option value="H">H</option>
+            </select>
+          </div>
+        </div>
+
+        <p id="status" class="status" role="status" aria-live="polite"></p>
+
+        <div class="preview">
+          <div class="qrShell">
+            <div id="qrcode" class="qrcode" aria-label="QR code preview"></div>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button id="copy" class="btn" type="button" disabled>Copy PNG</button>
+          <a id="download" class="btn" download="qr.png" href="#" aria-disabled="true">Download PNG</a>
+          <button id="clear" class="btn danger" type="button">Clear</button>
+        </div>
+      </section>
+
+      <footer class="footer">
+        <span class="hint">Tip: Press Enter to generate.</span>
+      </footer>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+    <script type="module" src="/assets/app.js"></script>
+  </body>
+</html>
