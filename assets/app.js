@@ -21,6 +21,15 @@ function setStatus(text) {
   els.status.textContent = text;
 }
 
+function ensureQrLib() {
+  // qrcode.js exposes a global `QRCode`
+  if (typeof window.QRCode !== "function") {
+    setStatus("QR library failed to load. Please refresh.");
+    return false;
+  }
+  return true;
+}
+
 function clearQr() {
   els.qrcode.innerHTML = "";
   if (state.lastPngUrl) URL.revokeObjectURL(state.lastPngUrl);
@@ -97,6 +106,7 @@ async function copyPngToClipboard(dataUrl) {
 }
 
 function renderQr(text) {
+  if (!ensureQrLib()) return;
   clearQr();
 
   const size = Number.parseInt(els.size.value, 10);
@@ -113,7 +123,7 @@ function renderQr(text) {
           : window.QRCode.CorrectLevel.H;
 
   // eslint-disable-next-line no-new
-  new window.QRCode(els.qrcode, {
+  new QRCode(els.qrcode, {
     text,
     width: size,
     height: size,
@@ -127,6 +137,7 @@ function renderQr(text) {
 }
 
 function tryGenerate() {
+  if (!ensureQrLib()) return;
   const normalized = normalizeLink(els.link.value);
   if (!normalized) {
     setStatus("Paste a link to generate a QR code.");
