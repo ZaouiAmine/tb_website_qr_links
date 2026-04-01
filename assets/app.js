@@ -121,6 +121,9 @@ function renderQr(text) {
     colorLight: "#ffffff",
     correctLevel,
   });
+
+  // Give qrcode.js a tick to render (<img> or <canvas>), then enable exports.
+  setTimeout(() => void refreshExportLinks(), 0);
 }
 
 function tryGenerate() {
@@ -193,13 +196,6 @@ async function refreshExportLinks() {
     setStatus("QR generated. Export may be blocked by browser permissions.");
   }
 }
-
-// When QR is generated, give qrcode.js a tick to render then refresh export links.
-const _renderQr = renderQr;
-renderQr = function renderQrPatched(text) {
-  _renderQr(text);
-  setTimeout(() => void refreshExportLinks(), 0);
-};
 
 els.download.addEventListener("click", async (e) => {
   const node = getQrSourceNode();
